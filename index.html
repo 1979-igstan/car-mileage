@@ -125,7 +125,9 @@ button:hover{background:#105f4e}
     const used=Math.max(0,data.latest-data.baseline),left=LIMIT-used,end=annualEndFor(data.periodStart);
     const monthStart=monthStartFor(isoToday()), monthEnd=monthEndFor(monthStart);
     const monthBaselineReading=data.readings.filter(r=>r.date<=monthStart).sort((a,b)=>a.date.localeCompare(b.date)).slice(-1)[0];
-    const monthBaseline=monthBaselineReading?monthBaselineReading.value:data.baseline;
+    // In the first month of the annual period, use the true starting odometer,
+    // not a later reading that may have been entered on the same calendar date.
+    const monthBaseline=monthStart===data.periodStart?data.baseline:(monthBaselineReading?monthBaselineReading.value:data.baseline);
     const monthUsed=Math.max(0,data.latest-monthBaseline),monthLeft=MONTH_LIMIT-monthUsed;
     $("period").textContent=`Годовой период: ${fmtDate(data.periodStart)} — ${fmtDate(end)}`;
     $("used").textContent=`${fmt(used)} км`; $("current").textContent=`${fmt(data.latest)} км`;
