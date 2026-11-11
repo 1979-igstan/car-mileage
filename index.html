@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Годовой контроль пробега</title>
+<title>Контроль месячного и годового пробега</title>
 <style>
 :root{font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#17212b;background:#f3f6f8}
 *{box-sizing:border-box}body{margin:0;min-height:100vh;display:grid;place-items:center;padding:22px}
@@ -15,7 +15,12 @@ h1{font-size:clamp(25px,5vw,34px);margin:8px 0 5px;letter-spacing:-.04em}
 .stat{background:#f5f8fa;border-radius:16px;padding:17px}
 .stat span{display:block;color:#687887;font-size:13px;margin-bottom:8px}
 .stat strong{font-size:clamp(23px,5vw,30px);letter-spacing:-.04em;font-variant-numeric:tabular-nums}
-.remaining{background:#102a43;color:#fff;border-radius:20px;padding:22px;margin-bottom:24px}
+.remaining{background:#102a43;color:#fff;border-radius:20px;padding:22px;margin-bottom:16px}
+.monthly{background:#176451;color:#fff;border-radius:20px;padding:22px;margin-bottom:24px}
+.monthly .label{font-size:14px;color:#d1eee5}
+.monthly strong{display:block;font-size:clamp(38px,8vw,50px);line-height:1.1;letter-spacing:-.05em;margin:8px 0}
+.monthly small{color:#d1eee5}
+.monthly .bar{background:#4b8879}
 .remaining .label{font-size:14px;color:#c6d5e1}
 .remaining strong{display:block;font-size:clamp(42px,9vw,58px);line-height:1.1;letter-spacing:-.05em;margin:8px 0}
 .remaining small{color:#c6d5e1}
@@ -48,13 +53,23 @@ button:hover{background:#105f4e}
   </section>
   <section class="stats">
     <div class="stat"><span>Пробег с начала года</span><strong id="used">0 км</strong></div>
-    <div class="stat"><span>Текущее показание</span><strong id="current">21 км</strong></div>
+    <div class="stat"><span>Текущее показание</span><strong id="current">8 км</strong></div>
   </section>
   <section class="remaining">
     <div class="label">Остаток годового лимита</div>
     <strong id="left">14 979 км</strong>
     <small id="sub">Осталось из 15 000 км · в среднем 1 250 км в месяц</small>
     <div class="bar"><i id="progress"></i></div>
+  </section>
+  <section class="monthly">
+    <div class="label">Остаток месячного лимита</div>
+    <strong id="monthLeft">1 250 км</strong>
+    <small id="monthSub">Месячный период: 10 ноября — 9 декабря</small>
+    <div class="bar"><i id="monthProgress"></i></div>
+    <div style="display:flex;justify-content:space-between;gap:12px;margin-top:14px;font-size:13px;color:#d1eee5">
+      <span>Израсходовано: <b id="monthUsed">0 км</b></span>
+      <span>Лимит: <b>1 250 км</b></span>
+    </div>
   </section>
   <section>
     <div class="fields">
@@ -69,13 +84,22 @@ button:hover{background:#105f4e}
 </main>
 <script>
 (() => {
-  const LIMIT=15000, START="2026-11-10", KEY="annualMileageTracker_v2", OLD_KEY="monthlyMileageTracker_v1";
+  const LIMIT=15000, MONTH_LIMIT=1250, START="2026-11-10", KEY="annualMileageTracker_v2", OLD_KEY="monthlyMileageTracker_v1";
   const $=id=>document.getElementById(id);
   const isoToday=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;};
   const dateObj=s=>new Date(s+"T12:00:00");
   const fmtDate=s=>dateObj(s).toLocaleDateString("ru-RU",{day:"2-digit",month:"long",year:"numeric"});
   const fmt=n=>Math.round(n).toLocaleString("ru-RU");
   const annualStartFor=s=>{const d=dateObj(s),y=d.getFullYear(),candidate=`${y}-11-10`;return s>=candidate?candidate:`${y-1}-11-10`;};
+  const monthStartFor=s=>{
+    const d=dateObj(s),y=d.getFullYear(),m=d.getMonth();
+    const start=d.getDate()>=10?new Date(y,m,10,12):new Date(y,m-1,10,12);
+    return `${start.getFullYear()}-${String(start.getMonth()+1).padStart(2,"0")}-10`;
+  };
+  const monthEndFor=start=>{
+    const d=dateObj(start);d.setMonth(d.getMonth()+1);d.setDate(9);
+    return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+  };
   const annualEndFor=start=>{const d=dateObj(start);d.setFullYear(d.getFullYear()+1);d.setDate(d.getDate()-1);return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;};
   const initial={periodStart:START,baseline:8,latest:8,latestDate:START,readings:[{date:START,value:8}]};
   let data;
@@ -99,10 +123,19 @@ button:hover{background:#105f4e}
   function render(){
     rollover();
     const used=Math.max(0,data.latest-data.baseline),left=LIMIT-used,end=annualEndFor(data.periodStart);
+    const monthStart=monthStartFor(isoToday()), monthEnd=monthEndFor(monthStart);
+    const monthBaselineReading=data.readings.filter(r=>r.date<=monthStart).sort((a,b)=>a.date.localeCompare(b.date)).slice(-1)[0];
+    const monthBaseline=monthBaselineReading?monthBaselineReading.value:data.baseline;
+    const monthUsed=Math.max(0,data.latest-monthBaseline),monthLeft=MONTH_LIMIT-monthUsed;
     $("period").textContent=`Годовой период: ${fmtDate(data.periodStart)} — ${fmtDate(end)}`;
     $("used").textContent=`${fmt(used)} км`; $("current").textContent=`${fmt(data.latest)} км`;
     $("left").textContent=`${fmt(left)} км`;
     $("sub").textContent=left<0?`Превышение годового лимита на ${fmt(Math.abs(left))} км`:`Осталось из 15 000 км · в среднем 1 250 км в месяц`;
+    $("monthLeft").textContent=`${fmt(monthLeft)} км`;
+    $("monthSub").textContent=`Месячный период: ${fmtDate(monthStart)} — ${fmtDate(monthEnd)}${monthLeft<0?" · лимит превышен":""}`;
+    $("monthUsed").textContent=`${fmt(monthUsed)} км`;
+    $("monthProgress").style.width=`${Math.min(100,Math.max(0,monthUsed/MONTH_LIMIT*100))}%`;
+    $("monthProgress").style.background=monthLeft<0?"#ff9b8f":"#a7e3cf";
     $("progress").style.width=`${Math.min(100,Math.max(0,used/LIMIT*100))}%`;
     $("progress").style.background=left<0?"#ff9b8f":"#7dd3b0";
     $("readingDate").value=isoToday();$("odometer").value=data.latest;
@@ -119,7 +152,7 @@ button:hover{background:#105f4e}
     data.latest=value;data.latestDate=date;
     const i=data.readings.findIndex(r=>r.date===date);if(i>=0)data.readings[i].value=value;else data.readings.push({date,value});
     data.readings.sort((a,b)=>a.date.localeCompare(b.date));persist();
-    $("message").textContent="Показание сохранено. Годовой остаток пересчитан.";render();
+    $("message").textContent="Показание сохранено. Месячный и годовой остатки пересчитаны.";render();
   });
   render();
 })();
